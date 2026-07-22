@@ -68,6 +68,7 @@ GitHub Actions runs the deterministic quality checks on every push to `main` or
 ```sh
 cargo fmt --all -- --check
 cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets --all-features
 cargo build --all-targets --all-features
 cargo build --release --all-targets --all-features
 cargo rustc --release -- --emit=llvm-ir

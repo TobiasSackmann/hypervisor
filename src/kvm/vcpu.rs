@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use kvm_bindings::{kvm_regs, kvm_sregs};
 use kvm_ioctls::VcpuFd;
 
+/// Places the vCPU in the minimal state needed to start executing at `guest_start`.
 pub fn setup_real_mode_registers(vcpu: &mut VcpuFd, guest_start: u64) -> Result<()> {
     let mut sregs: kvm_sregs = vcpu.get_sregs().context("get special registers")?;
 
