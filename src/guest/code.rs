@@ -7,9 +7,6 @@ pub const GUEST_START: u64 = 0x1000;
 /// COM1 serial port used by the tiny guest.
 pub const SERIAL_PORT_COM1: u16 = 0x3f8;
 
-/// Default message emitted by the tiny guest.
-pub const DEFAULT_MESSAGE: &[u8] = b"Hello from guest\n";
-
 /// Builds a tiny real-mode-ish x86 guest that writes `message` to COM1 and halts.
 ///
 /// The emitted instruction pattern is intentionally simple:
