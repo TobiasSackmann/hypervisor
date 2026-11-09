@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use kvm_ioctls::VcpuExit;
 
 use crate::guest::code::{
-GUEST_MEM_SIZE, GUEST_START, SERIAL_PORT_COM1, build_serial_message_guest,
+    GUEST_MEM_SIZE, GUEST_START, SERIAL_PORT_COM1, build_serial_message_guest,
 };
 use crate::kvm::{device, memory::GuestRam, serial::SerialConsole, vcpu};
 
