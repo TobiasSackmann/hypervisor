@@ -76,6 +76,58 @@ product management API also handles VM definitions, persistence, resource limits
 and operations across multiple VMs. See the
 [QMP specification](https://www.qemu.org/docs/master/interop/qmp-spec.html).
 
+## Planned product capabilities
+
+The foreground QEMU launcher is the implemented starting point. The following
+capabilities are planned; this list records product scope, not a delivery promise
+or a claim that these features already exist:
+
+- A persistent Rust management service with a shared API for the terminal CLI,
+  a future graphical interface, and a future Terraform provider.
+- A resource-limited, variable number of VMs on one host, stable VM IDs, persisted
+  definitions, desired/observed state, and recovery after service restart.
+- QMP-based status, lifecycle events, graceful shutdown, timeout handling, explicit
+  forced termination, child-process reaping, and runtime resource cleanup.
+- Configurable RAM/vCPUs, guest images and boot profiles, independent writable
+  disks, serial consoles, networking, and aggregate resource accounting.
+- Native x86-64 development first; AArch64 validation on Raspberry Pi with at least
+  two Alpine VMs as the initial efficiency acceptance scenario. Measure memory,
+  idle CPU, boot time, and representative workloads before setting scale targets.
+- Broader OS and custom-kernel support, validated per architecture and boot path.
+- Isolation suitable for untrusted workloads, including restricted host access,
+  deliberate device exposure, and QEMU process isolation.
+- Ephemeral VM jobs as described below.
+
+## Planned ephemeral VM jobs
+
+Run a supplied program inside a temporary VM and clean up after it finishes.
+An illustrative future command (not currently implemented) is:
+
+```sh
+hypervisor job --image alpine.qcow2 --program ./my-program
+```
+
+The user supplies a guest OS image and a program or binary. The service creates a
+private writable overlay or disk, boots the VM, delivers and executes the payload,
+captures stdout/stderr and the guest program's exit code, then shuts down the VM
+and removes temporary resources. Optional non-blocking submission can return a
+job ID for later status and result retrieval; it still requires managed cleanup.
+
+An arbitrary ISO plus a binary does not automatically execute the binary. Start
+with a prepared Alpine image and a boot-time script; a small in-guest agent may
+follow. Define a payload/result transport and readiness signal. The payload must
+match the guest CPU architecture and OS/runtime dependencies. A QEMU exit code
+alone is not the guest program's exit code, and QMP alone does not execute guest
+programs or retrieve their results.
+
+Build jobs on the shared VM lifecycle/backend rather than a second VMM. Include
+execution deadlines, cancellation, reliable output/result capture, host resource
+limits, and cleanup on success, failure, or timeout. Define result retention before
+deleting temporary disks. Isolation for hostile code must be validated separately.
+
+The direct-KVM string-output demo is a learning artifact, not the implementation
+of this job feature. Retire it after the learning phase; its history remains in Git.
+
 ## First product milestone: small VMs on Raspberry Pi
 
 The first use case is running multiple minimal Alpine Linux VMs concurrently on a
@@ -131,8 +183,8 @@ cargo run -- qemu /path/to/alpine-virt-x86_64.iso
 Log in as `root` (no password on the untouched live image), then use `poweroff`
 to shut down. QEMU also supports Ctrl+A, release, then X to terminate immediately;
 terminal software may intercept that shortcut. There is no persistent guest disk,
-so changes inside the live guest are lost after shutdown. The Rust launcher waits
-for QEMU and reports an unsuccessful process exit as an error.
+so changes inside the live guest are lost after shutdown. The Rust launcher starts QEMU with `Command::spawn()`, then calls `Child::wait()`
+and reports an unsuccessful process exit as an error.
 
 This is a foreground learning step, not yet the long-running management service.
 QMP, persisted VM definitions, configurable resources, and multi-VM management
