@@ -108,13 +108,40 @@ Architecture references:
 - [QEMU Arm virt platform](https://www.qemu.org/docs/master/system/arm/virt.html)
 - [Alpine Linux installation downloads](https://www.alpinelinux.org/downloads/)
 
-## Current implementation: direct KVM learning prototype
+## Current implementation: QEMU launcher and KVM learning prototype
 
-The QEMU backend and multi-VM product described above are planned, not implemented.
-The existing code is an x86-only direct-KVM learning prototype. It remains useful
-for understanding guest memory, register setup, and VM exits, but does not yet
-implement the Raspberry Pi milestone. The commands and code map below describe
-this prototype.
+The first QEMU backend boots an x86-64 live ISO in the foreground. It uses KVM,
+256 MiB RAM, one vCPU, no networking, and the terminal console. Install
+`qemu-system-x86_64` and provide read/write access to `/dev/kvm` on an x86-64 Linux
+host. Software emulation is not used as a fallback.
+
+Download the **Virtual / x86_64** ISO from the
+[official Alpine downloads](https://www.alpinelinux.org/downloads/) and verify its
+published SHA-256 checksum. Store images outside Git. The initial manual exercise
+used Alpine 3.24.4, with SHA-256:
+
+```text
+157d353f8e54252cad2d9812a0d56bb7fa2231fc154a110e1d180d7480ef8b4f
+```
+
+```sh
+cargo run -- qemu /path/to/alpine-virt-x86_64.iso
+```
+
+Log in as `root` (no password on the untouched live image), then use `poweroff`
+to shut down. QEMU also supports Ctrl+A, release, then X to terminate immediately;
+terminal software may intercept that shortcut. There is no persistent guest disk,
+so changes inside the live guest are lost after shutdown. The Rust launcher waits
+for QEMU and reports an unsuccessful process exit as an error.
+
+This is a foreground learning step, not yet the long-running management service.
+QMP, persisted VM definitions, configurable resources, and multi-VM management
+remain planned. [`src/qemu.rs`](src/qemu.rs) contains the backend separately from
+CLI dispatch in [`src/main.rs`](src/main.rs), so later clients can reuse it.
+
+The existing direct-KVM prototype remains available through `kvm-demo`. The code
+map and limitations below describe that prototype; neither backend yet implements
+the Raspberry Pi milestone.
 
 ## Current MVP
 
@@ -130,7 +157,7 @@ The current code starts one tiny x86 guest through `/dev/kvm`:
 8. Run the vCPU, log each `IoOut` exit, collect bytes for port `0x3f8`, and resume.
 9. On `HLT`, print the collected message and stop the VM loop.
 
-The guest is generated as raw x86 machine code from `Hello from guest\n`.
+The guest is generated as raw x86 machine code from the CLI message followed by a newline.
 It selects COM1 once, emits one `MOV`/`OUT` pair per message byte, and halts once
 at the end:
 
@@ -171,7 +198,7 @@ read/write access to `/dev/kvm`. Building requires a Rust toolchain supporting
 edition 2024 and Cargo. CI uses the stable Rust toolchain.
 
 ```sh
-cargo run
+cargo run -- kvm-demo "Hello from guest"
 ```
 
 Expected output (intermediate byte logs omitted):
@@ -183,9 +210,8 @@ serial output: Hello from guest
 guest executed HLT; VM stopped successfully
 ```
 
-The message, memory size, and entry address are constants in
-[`src/guest/code.rs`](src/guest/code.rs); there are no CLI options yet.
-For a first experiment, change `DEFAULT_MESSAGE` and run again.
+The message is an optional argument to `kvm-demo`. Memory size and entry address
+remain constants in [`src/guest/code.rs`](src/guest/code.rs).
 
 ## Tests and manual smoke test
 
@@ -199,12 +225,12 @@ They cover the generated COM1 setup, per-byte instructions, halting with an empt
 message, serial port filtering, byte collection, and invalid UTF-8 handling.
 They do not execute a VM or verify the KVM memory and register setup.
 
-On a KVM host, use `cargo run` as a manual smoke test. Verify that the output
+On a KVM host, use `cargo run -- kvm-demo "Hello from guest"` as a manual smoke test. Verify that the output
 contains `serial output: Hello from guest` followed by
 `guest executed HLT; VM stopped successfully`. A successful process exit alone
 is insufficient: unexpected VM exits currently also end the loop with `Ok(())`.
 
-## Current limitations
+## Direct-KVM prototype limitations
 
 - One VM, one vCPU, one RAM region, and a generated real-mode-style guest.
 - No external guest image loader, ELF/bzImage support, or Linux boot path yet.
