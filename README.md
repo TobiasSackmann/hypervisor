@@ -187,9 +187,18 @@ so changes inside the live guest are lost after shutdown. The Rust launcher star
 and reports an unsuccessful process exit as an error.
 
 This is a foreground learning step, not yet the long-running management service.
-QMP, persisted VM definitions, configurable resources, and multi-VM management
-remain planned. [`src/qemu.rs`](src/qemu.rs) contains the backend separately from
+The launcher now creates a private per-VM Unix socket directory, negotiates QMP,
+and prints `QMP VM status: running` (or the observed QEMU state) before waiting for
+shutdown. Connection and response waits are bounded; failed QMP setup terminates
+and reaps QEMU. Runtime files are removed after exit. The initial query is not a
+guest-readiness check: Alpine may still be booting. QMP events are currently
+skipped during requests; continuous monitoring and control remain future work.
+
+Persisted VM definitions, configurable resources, and multi-VM management remain
+planned. [`src/qemu.rs`](src/qemu.rs) contains the backend separately from
 CLI dispatch in [`src/main.rs`](src/main.rs), so later clients can reuse it.
+[`src/qemu/qmp.rs`](src/qemu/qmp.rs) holds the synchronous QMP client, using
+`serde_json` for messages and `tempfile` for private runtime directories.
 
 The existing direct-KVM prototype remains available through `kvm-demo`. The code
 map and limitations below describe that prototype; neither backend yet implements
