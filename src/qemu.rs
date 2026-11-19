@@ -49,8 +49,8 @@ pub fn run(iso: &Path) -> Result<()> {
 
         query_version(&mut qmp)?;
 
-        let state = query_status(&mut qmp)?;
-        eprintln!("QMP VM status: {state}");
+        let status = query_status(&mut qmp)?;
+        eprintln!("QMP VM status: {status}");
 
         let exit_status = child.wait().context("wait for QEMU")?;
         ensure!(exit_status.success(), "QEMU exited unsuccessfully: {exit_status}");
