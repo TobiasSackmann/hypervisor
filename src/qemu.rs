@@ -48,12 +48,19 @@ pub fn run(iso: &Path) -> Result<()> {
         let mut qmp = qmp::Qmp::new(stream)?;
 
         query_version(&mut qmp)?;
-
+        pause_vm(&mut qmp)?;
+        let status = query_status(&mut qmp)?;
+        eprintln!("QMP VM status: {status}");
+        thread::sleep(Duration::from_secs(5));
+        resume_vm(&mut qmp)?;
         let status = query_status(&mut qmp)?;
         eprintln!("QMP VM status: {status}");
 
         let exit_status = child.wait().context("wait for QEMU")?;
-        ensure!(exit_status.success(), "QEMU exited unsuccessfully: {exit_status}");
+        ensure!(
+            exit_status.success(),
+            "QEMU exited unsuccessfully: {exit_status}"
+        );
 
         Ok(())
     })();
@@ -80,6 +87,16 @@ fn query_status(qmp: &mut qmp::Qmp) -> Result<String, anyhow::Error> {
         .as_str()
         .context("QMP status missing status string")?;
     Ok(status.to_owned())
+}
+
+fn pause_vm(qmp: &mut qmp::Qmp) -> Result<(), anyhow::Error> {
+    qmp.execute("stop")?;
+    Ok(())
+}
+
+fn resume_vm(qmp: &mut qmp::Qmp) -> Result<()> {
+    qmp.execute("cont")?;
+    Ok(())
 }
 
 fn query_version(qmp: &mut qmp::Qmp) -> Result<(), anyhow::Error> {
