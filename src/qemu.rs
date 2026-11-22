@@ -2,6 +2,7 @@ mod qmp;
 
 use std::{
     io::ErrorKind,
+    io::{self, Write},
     os::unix::net::UnixStream,
     path::Path,
     process::{Child, Command},
@@ -48,19 +49,7 @@ pub fn run(iso: &Path) -> Result<()> {
         let mut qmp = qmp::Qmp::new(stream)?;
 
         query_version(&mut qmp)?;
-        pause_vm(&mut qmp)?;
-        let status = query_status(&mut qmp)?;
-        eprintln!("QMP VM status: {status}");
-        thread::sleep(Duration::from_secs(5));
-        resume_vm(&mut qmp)?;
-        let status = query_status(&mut qmp)?;
-        eprintln!("QMP VM status: {status}");
-
-        let exit_status = child.wait().context("wait for QEMU")?;
-        ensure!(
-            exit_status.success(),
-            "QEMU exited unsuccessfully: {exit_status}"
-        );
+        control_vm(&mut qmp, &mut child)?;
 
         Ok(())
     })();
@@ -79,6 +68,35 @@ pub fn run(iso: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+fn control_vm(qmp: &mut qmp::Qmp, child: &mut Child) -> Result<()> {
+    loop {
+        if let Some(exit_status) = child.try_wait().context("check QEMU process")? {
+            ensure!(
+                exit_status.success(),
+                "QEMU exited unsuccessfully: {exit_status}"
+            );
+            return Ok(());
+        }
+        print!("hypervisor> ");
+        io::stdout().flush()?;
+        let mut input = String::new();
+        let bytes_read = io::stdin().read_line(&mut input)?;
+        ensure!(bytes_read > 0, "control input closed");
+
+        match input.trim() {
+            "status" => {
+                let status = query_status(qmp)?;
+                eprintln!("QMP VM status: {status}");
+            }
+            "help" => eprintln!("Available commands: status, help, pause, resume"),
+            "pause" => pause_vm(qmp)?,
+            "resume" => resume_vm(qmp)?,
+            "" => {} // Ignore empty input,
+            _ => eprintln!("Unknown command. Available commands: status, help, pause, resume"),
+        }
+    }
 }
 
 fn query_status(qmp: &mut qmp::Qmp) -> Result<String, anyhow::Error> {
