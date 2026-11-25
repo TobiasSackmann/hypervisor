@@ -7,6 +7,7 @@ use std::{
     path::Path,
     process::{Child, Command},
     thread,
+    thread::sleep,
     time::{Duration, Instant},
 };
 
@@ -90,14 +91,15 @@ fn control_vm(qmp: &mut qmp::Qmp, child: &mut Child) -> Result<()> {
                 eprintln!("QMP VM status: {status}");
             }),
             "help" => {
-                eprintln!("Available commands: status, help, pause, resume");
+                eprintln!("Available commands: status, help, pause, resume, shutdown");
                 Ok(())
             }
             "pause" => pause_vm(qmp),
             "resume" => resume_vm(qmp),
+            "shutdown" => shutdown_vm(qmp, child),
             "" => Ok(()), // Ignore empty input,
             _ => {
-                eprintln!("Unknown command. Available commands: status, help, pause, resume");
+                eprintln!("Unknown command. Available commands: status, help, pause, resume, shutdown");
                 Ok(())
             }
         };
@@ -108,6 +110,25 @@ fn control_vm(qmp: &mut qmp::Qmp, child: &mut Child) -> Result<()> {
                 return Err(error);
             }
         }
+    }
+}
+
+fn shutdown_vm(qmp: &mut qmp::Qmp, child: &mut Child) -> Result<(), anyhow::Error> {
+    qmp.execute("system_powerdown")?;
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        if let Some(exit_status) = child.try_wait().context("check QEMU process")? {
+            ensure!(
+                exit_status.success(),
+                "QEMU exited unsuccessfully: {exit_status}"
+            );
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            eprintln!("Shutdown timed out. Returning to the prompt.");
+            return Ok(());
+        }
+        sleep(Duration::from_millis(20));
     }
 }
 
