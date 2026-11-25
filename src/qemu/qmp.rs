@@ -7,6 +7,35 @@ use std::{
 use anyhow::{Context, Result, bail, ensure};
 use serde_json::{Value, json};
 
+#[derive(Debug)]
+pub(super) struct CommandRejected {
+    pub command: String,
+    pub class: String,
+    pub description: String,
+}
+
+impl CommandRejected {
+    pub fn new(command: String, class: String, description: String) -> Self {
+        Self {
+            command,
+            class,
+            description,
+        }
+    }
+}
+
+impl std::fmt::Display for CommandRejected {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Command '{}' failed ({}): {}",
+            self.command, self.class, self.description
+        )
+    }
+}
+
+impl std::error::Error for CommandRejected {}
+
 /// A small synchronous QMP client, with one request in flight at a time.
 pub(super) struct Qmp {
     reader: BufReader<UnixStream>,
@@ -48,8 +77,19 @@ impl Qmp {
                 continue;
             }
             if let Some(error) = response.get("error") {
-                bail!("QMP {command} failed: {error}");
+                bail!(CommandRejected::new(
+                    command.to_owned(),
+                    error["class"]
+                        .as_str()
+                        .context("QMP error missing class")?
+                        .to_owned(),
+                    error["desc"]
+                        .as_str()
+                        .context("QMP error missing description")?
+                        .to_owned(),
+                ));
             }
+
             return response
                 .get("return")
                 .cloned()

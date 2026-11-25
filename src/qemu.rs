@@ -85,16 +85,28 @@ fn control_vm(qmp: &mut qmp::Qmp, child: &mut Child) -> Result<()> {
         let bytes_read = io::stdin().read_line(&mut input)?;
         ensure!(bytes_read > 0, "control input closed");
 
-        match input.trim() {
-            "status" => {
-                let status = query_status(qmp)?;
+        let command_result: Result<()> = match input.trim() {
+            "status" => query_status(qmp).map(|status| {
                 eprintln!("QMP VM status: {status}");
+            }),
+            "help" => {
+                eprintln!("Available commands: status, help, pause, resume");
+                Ok(())
             }
-            "help" => eprintln!("Available commands: status, help, pause, resume"),
-            "pause" => pause_vm(qmp)?,
-            "resume" => resume_vm(qmp)?,
-            "" => {} // Ignore empty input,
-            _ => eprintln!("Unknown command. Available commands: status, help, pause, resume"),
+            "pause" => pause_vm(qmp),
+            "resume" => resume_vm(qmp),
+            "" => Ok(()), // Ignore empty input,
+            _ => {
+                eprintln!("Unknown command. Available commands: status, help, pause, resume");
+                Ok(())
+            }
+        };
+        if let Err(error) = command_result {
+            if error.is::<qmp::CommandRejected>() {
+                eprintln!("Command rejected: {error}");
+            } else {
+                return Err(error);
+            }
         }
     }
 }
