@@ -28,10 +28,8 @@ The intended use cases are:
 
 ## Management architecture and scale
 
-The number of VMs is configurable and limited by available host resources, not a
-fixed count in the implementation. Two concurrent VMs are the first acceptance
-scenario, not a product limit. The initial scope is one host; multi-host scheduling
-is a separate future decision.
+Support a configurable number of concurrent VMs within the available resources
+on one host. Multi-host scheduling is a separate future decision.
 
 Design the management layer independently of its user interfaces from the start:
 
@@ -90,9 +88,10 @@ or a claim that these features already exist:
   forced termination, child-process reaping, and runtime resource cleanup.
 - Configurable RAM/vCPUs, guest images and boot profiles, independent writable
   disks, serial consoles, networking, and aggregate resource accounting.
-- Native x86-64 development first; AArch64 validation on Raspberry Pi with at least
-  two Alpine VMs as the initial efficiency acceptance scenario. Measure memory,
-  idle CPU, boot time, and representative workloads before setting scale targets.
+- Native x86-64 development first; AArch64 validation on Raspberry Pi with
+  multiple concurrent Alpine VMs as the initial efficiency acceptance scenario.
+  Measure memory, idle CPU, boot time, and representative workloads before
+  setting scale targets.
 - Broader OS and custom-kernel support, validated per architecture and boot path.
 - Isolation suitable for untrusted workloads, including restricted host access,
   deliberate device exposure, and QEMU process isolation.
@@ -148,9 +147,9 @@ image. Firmware and the guest boot path must be selected and documented during
 this first boot experiment.
 
 The milestone is complete when the Rust CLI can start, inspect, and gracefully
-stop at least two independent Alpine VMs on the selected Pi, provide console and
-network access, and clean up child processes and runtime resources. Record the
-host baseline, per-VM and total memory use, idle CPU consumption, boot time, and
+stop a configurable number of independent Alpine VMs concurrently on the selected
+Pi, provide console and network access, and clean up child processes and runtime
+resources. Record the host baseline, per-VM and total memory use, idle CPU consumption, boot time, and
 behavior under a small repeatable workload. Set numerical resource targets after
 measuring the selected hardware.
 
@@ -300,6 +299,20 @@ is insufficient: unexpected VM exits currently also end the loop with `Ok(())`.
   are not collected by the serial console.
 - No automated KVM integration test; CI checks builds and pure logic only.
 
+## Next steps
+
+1. Add an explicit `force-stop` command to the foreground launcher. Reuse
+   `terminate(child)` to kill and reap QEMU, then return successfully from the
+   control loop so the runtime directory is cleaned up. Keep graceful
+   `shutdown` available and return to the prompt on timeout so the operator can
+   decide whether to force-stop. Test with Alpine's ACPI service stopped.
+2. Enable Alpine's ACPI power-button handler automatically where the guest boot
+   setup allows it. The live-ISO test required running `rc-service acpid start`
+   inside Alpine before the QMP shutdown request worked. Try configuring the
+   service to start at boot in a prepared Alpine image or through a guest
+   boot-time script. Verify graceful shutdown without manually starting the
+   service from the console.
+
 ## Roadmap
 
 Prioritize the QEMU-backed product path:
@@ -318,12 +331,13 @@ Prioritize the QEMU-backed product path:
 4. Add QMP (QEMU Machine Protocol) control through a per-VM Unix socket for status,
    shutdown, and lifecycle events. Handle startup failures, process exit, timeouts,
    and explicit forced shutdown; reap children and clean up runtime files.
-5. Add a dynamic VM registry and resource accounting, using two concurrent VMs as
-   the first acceptance scenario. Give VMs independent writable disks, unique identifiers,
+5. Add a dynamic VM registry and resource accounting and validate it with multiple
+   concurrent VMs. Give VMs independent writable disks, unique identifiers,
    sockets, and network endpoints. Start with user-mode networking and explicit
    SSH port forwarding; reserve host capacity when assigning guest resources.
-6. Measure the two-VM milestone on the Pi. Tune virtual devices and guest services
-   against recorded memory, CPU, boot-time, and workload results. Add tests for
+6. Measure the multi-VM milestone on the Pi with different concurrent VM counts.
+   Tune virtual devices and guest services against recorded memory, CPU,
+   boot-time, and workload results. Add tests for
    configuration and process/control failures, plus an opt-in QEMU/KVM smoke test.
 7. Extend guest profiles and image/boot support toward other Linux distributions,
    custom kernels, FreeBSD, and Windows. Validate support per host architecture;
